@@ -314,22 +314,13 @@ const EffectLayer: React.FC<{
       return (
         <div
           style={{
-            perspective: "1200px",
+            opacity: Math.min(sp * 2, 1) * fadeOut,
+            transform: `rotateY(${ry}deg)`,
             width: "100%",
             height: "100%",
           }}
         >
-          <div
-            style={{
-              opacity: Math.min(sp * 2, 1) * fadeOut,
-              transform: `rotateY(${ry}deg)`,
-              width: "100%",
-              height: "100%",
-              transformStyle: "preserve-3d",
-            }}
-          >
-            {img}
-          </div>
+          {img}
         </div>
       );
     }

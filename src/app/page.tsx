@@ -4,29 +4,30 @@ import React, { useState, useEffect, useRef } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { EffectSelector } from "@/components/EffectSelector";
 import { GenerateButton } from "@/components/GenerateButton";
-import type { Effect, TextOverlayConfig } from "@/lib/validation";
+import { renderReelVideoClient } from "@/lib/renderVideoClient";
+import {
+  validateVideoFormData,
+  type Effect,
+  type TextOverlayConfig,
+} from "@/lib/validation";
 
 type AppState = "idle" | "generating" | "done" | "error";
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export default function Home() {
-  // Form state
   const [images, setImages] = useState<File[]>([]);
   const [effects, setEffects] = useState<Effect[]>([]);
   const [overlays, setOverlays] = useState<TextOverlayConfig[]>([]);
   const [durationPerImage, setDurationPerImage] = useState(3);
 
-  // App state
   const [appState, setAppState] = useState<AppState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState("");
   const [fileName, setFileName] = useState("");
   const [hasDownloaded, setHasDownloaded] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
 
-  // Warn the user before they refresh/navigate away when:
-  //   • images have been uploaded (unsaved work), OR
-  //   • a rendered video is ready but hasn't been downloaded yet.
+  const objectUrlRef = useRef<string | null>(null);
+
   const hasUnsavedWork = images.length > 0 || (appState === "done" && !hasDownloaded);
   const unsavedRef = useRef(hasUnsavedWork);
 
@@ -43,7 +44,22 @@ export default function Home() {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  // Keep effects and overlays array length in sync with images
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
+
+  const revokeDownloadUrl = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setDownloadUrl("");
+  };
+
   const handleImagesChange = (newImages: File[]) => {
     setImages(newImages);
     setEffects((prev) => newImages.map((_, i) => prev[i] ?? "fade"));
@@ -55,32 +71,41 @@ export default function Home() {
   const handleGenerate = async () => {
     if (!canGenerate) return;
 
+    const validation = validateVideoFormData({
+      images,
+      overlays,
+      effects,
+      durationPerImage,
+      backgroundStyle: "blur",
+    });
+
+    if (!validation.valid) {
+      setErrorMessage(validation.error ?? "Invalid form data.");
+      setAppState("error");
+      return;
+    }
+
     setAppState("generating");
     setErrorMessage("");
-    setDownloadUrl("");
+    revokeDownloadUrl();
     setHasDownloaded(false);
+    setRenderProgress(0);
+
+    const outputName = `reel-${Date.now()}.mp4`;
+    setFileName(outputName);
 
     try {
-      const formData = new FormData();
-      images.forEach((img) => formData.append("images", img));
-      formData.append("effects", JSON.stringify(effects));
-      formData.append("overlays", JSON.stringify(overlays));
-      formData.append("backgroundStyle", "blur");
-      formData.append("durationPerImage", durationPerImage.toString());
-
-      const res = await fetch("/api/generate-video", {
-        method: "POST",
-        body: formData,
+      const { objectUrl } = await renderReelVideoClient({
+        images,
+        overlays,
+        effects,
+        durationPerImage,
+        backgroundStyle: "blur",
+        onProgress: (p) => setRenderProgress(Math.round(p * 100)),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Video generation failed.");
-      }
-
-      setDownloadUrl(data.downloadUrl);
-      setFileName(data.fileName);
+      objectUrlRef.current = objectUrl;
+      setDownloadUrl(objectUrl);
       setAppState("done");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
@@ -91,18 +116,21 @@ export default function Home() {
 
   const handleDownload = () => {
     setHasDownloaded(true);
+    // Let the browser start the download before revoking the blob URL
+    setTimeout(() => revokeDownloadUrl(), 2000);
   };
 
   const handleReset = () => {
+    revokeDownloadUrl();
     setImages([]);
     setEffects([]);
     setOverlays([]);
     setDurationPerImage(3);
     setAppState("idle");
     setErrorMessage("");
-    setDownloadUrl("");
     setFileName("");
     setHasDownloaded(false);
+    setRenderProgress(0);
   };
 
   const estimatedDuration = images.length * durationPerImage;
@@ -110,33 +138,40 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Header */}
       <header className="border-b border-white/5 px-6 py-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-linear-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center">
+        <div
+          className="w-8 h-8 rounded-lg bg-linear-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center"
+        >
           <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M4 8h11a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" />
           </svg>
         </div>
         <div>
           <h1 className="text-sm font-bold tracking-tight text-white">Reel Generator</h1>
-          <p className="text-[11px] text-white/40">Powered by Remotion · 1080×1920 · MP4</p>
+          <p className="text-[11px] text-white/40">Rendered in your browser · 1080×1920 · MP4</p>
         </div>
         <div className="ml-auto">
           <span className="text-[11px] bg-violet-600/20 text-violet-300 border border-violet-600/30 rounded-full px-3 py-1">
-            Local MVP
+            Vercel-ready
           </span>
         </div>
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        <div className="flex items-start gap-2 bg-amber-900/15 border border-amber-500/25 rounded-xl px-4 py-3 text-xs text-amber-200/80">
+          <span className="shrink-0">ℹ</span>
+          <p>
+            Video is rendered on your device (no server storage). Use{" "}
+            <strong className="text-amber-100">Chrome or Edge</strong> for best results.
+            Refreshing the page removes the download link.
+          </p>
+        </div>
 
-        {/* Step 1 — Upload images */}
         <section className="bg-white/3 border border-white/8 rounded-2xl p-5">
           <SectionLabel number={1} label="Upload Images" subtitle="3–10 images recommended" />
           <ImageUploader images={images} onImagesChange={handleImagesChange} isGenerating={isGenerating} />
         </section>
 
-        {/* Step 2 — Effects & duration */}
         <section className="bg-white/3 border border-white/8 rounded-2xl p-5">
           <SectionLabel number={2} label="Effects & Duration" subtitle="Per-image animation and timing" />
           <EffectSelector
@@ -151,7 +186,6 @@ export default function Home() {
           />
         </section>
 
-        {/* Summary strip */}
         {images.length > 0 && (
           <div className="flex flex-wrap gap-3 text-xs">
             <Pill icon="🖼" label={`${images.length} image${images.length !== 1 ? "s" : ""}`} />
@@ -160,7 +194,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Error state */}
         {appState === "error" && (
           <div className="flex items-start gap-3 bg-red-900/20 border border-red-500/30 rounded-2xl px-4 py-3">
             <svg className="w-5 h-5 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -173,7 +206,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Generating progress */}
         {appState === "generating" && (
           <div className="bg-white/3 border border-white/8 rounded-2xl p-5">
             <div className="flex items-center gap-4">
@@ -186,21 +218,20 @@ export default function Home() {
               <div>
                 <p className="text-white font-semibold text-sm">Rendering your reel…</p>
                 <p className="text-white/40 text-xs mt-0.5">
-                  This may take {Math.round(estimatedDuration * 2)}–{Math.round(estimatedDuration * 5)} seconds
+                  {renderProgress}% — keep this tab open
                 </p>
               </div>
             </div>
             <div className="mt-4 h-1.5 bg-white/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-linear-to-r from-violet-500 to-fuchsia-500 rounded-full"
-                style={{ width: "60%", animation: "progress-slide 1.8s ease-in-out infinite" }}
+                className="h-full bg-linear-to-r from-violet-500 to-fuchsia-500 rounded-full transition-all duration-300"
+                style={{ width: `${Math.max(renderProgress, 2)}%` }}
               />
             </div>
           </div>
         )}
 
-        {/* Done state — download */}
-        {appState === "done" && downloadUrl && (
+        {appState === "done" && (
           <div className="bg-emerald-900/15 border border-emerald-500/30 rounded-2xl p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center">
@@ -219,7 +250,7 @@ export default function Home() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Downloaded — file has been removed from server
+                Downloaded — link removed from this session
               </div>
             ) : (
               <>
@@ -235,14 +266,13 @@ export default function Home() {
                   Download MP4
                 </a>
                 <p className="text-center text-amber-400/60 text-xs mt-2">
-                  ⚠ File will be deleted after download — save it to your device
+                  Download before refreshing — the link is not saved
                 </p>
               </>
             )}
           </div>
         )}
 
-        {/* Action buttons */}
         <div className="flex gap-3">
           <div className="flex-1">
             <GenerateButton
@@ -263,22 +293,12 @@ export default function Home() {
         </div>
 
         <p className="text-center text-white/20 text-xs pb-4">
-          Images are processed locally · Render file deleted after download
+          Images stay on your device · Video exists only in this browser tab until downloaded
         </p>
       </div>
-
-      <style>{`
-        @keyframes progress-slide {
-          0% { transform: translateX(-100%); }
-          50% { transform: translateX(80%); }
-          100% { transform: translateX(200%); }
-        }
-      `}</style>
     </main>
   );
 }
-
-// ── Small helper components ──────────────────────────────────────────────────
 
 function SectionLabel({
   number,

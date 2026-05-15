@@ -4,17 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "predev": "npm run remotion:bundle",
-    "remotion:bundle": "node scripts/bundle-remotion.mjs",
-    "build": "npm run remotion:bundle && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@remotion/player": "^4.0.461",
-    "@remotion/renderer": "^4.0.461",
+    "@remotion/web-renderer": "^4.0.461",
     "@tailwindcss/postcss": "^4.3.0",
-    "@types/uuid": "^10.0.0",
     "next": "16.2.6",
     "postcss": "^8.5.14",
     "react": "19.2.4",
@@ -22,15 +18,9 @@
     "react-easy-crop": "^5.5.7",
     "react-select": "^5.10.2",
     "remotion": "^4.0.461",
-    "tailwindcss": "^4.3.0",
-    "uuid": "^14.0.0"
-  },
-  "optionalDependencies": {
-    "@remotion/compositor-linux-x64-gnu": "4.0.461",
-    "@rspack/binding-linux-x64-gnu": "1.7.6"
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
-    "@remotion/bundler": "^4.0.461",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

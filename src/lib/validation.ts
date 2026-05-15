@@ -146,5 +146,13 @@ export function validateVideoFormData(data: VideoFormData): ValidationResult {
     };
   }
 
+  const totalSeconds = data.images.length * data.durationPerImage;
+  if (totalSeconds <= 5) {
+    return {
+      valid: false,
+      error: "Total video must be longer than 5 seconds. Add more images or increase duration per image.",
+    };
+  }
+
   return { valid: true };
 }
