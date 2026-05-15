@@ -15,6 +15,7 @@ Generate **9:16 reel-format MP4 videos** from a set of uploaded images, powered 
 - One-click MP4 download
 - Browser "Leave site?" guard when a rendered video is waiting for download
 - Automatic cleanup of temporary files
+- 
 
 ---
 
