@@ -12,6 +12,8 @@ import type { Effect, BackgroundStyle, TextPosition, TextAnimation, TextOverlayC
 
 export interface ReelFromImagesProps {
   images: string[];
+  title: string;
+  subtitle: string;
   /** Per-image text overlays — one entry per image */
   overlays?: TextOverlayConfig[];
   /** One effect per image — must have the same length as `images` */
