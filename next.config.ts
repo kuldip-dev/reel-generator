@@ -1,16 +1,22 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Remotion renderer and bundler are Node.js-only packages that use native
-  // binaries. Marking them as external prevents Next.js from trying to bundle
-  // them through webpack, which would fail because of the native compositor.
+  // Remotion renderer uses native compositor binaries — keep them out of the
+  // webpack/turbopack server bundle and include them via file tracing instead.
   serverExternalPackages: [
     "@remotion/renderer",
-    "@remotion/bundler",
     "remotion",
+    "@remotion/compositor-linux-x64-gnu",
   ],
 
-  // Increase the body size limit for image uploads (50 MB)
+  outputFileTracingIncludes: {
+    "/api/generate-video": [
+      "./.remotion/bundle/**/*",
+      "./node_modules/@remotion/renderer/**/*",
+      "./node_modules/@remotion/compositor-linux-x64-gnu/**/*",
+    ],
+  },
+
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",

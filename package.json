@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "predev": "npm run remotion:bundle",
+    "remotion:bundle": "node scripts/bundle-remotion.mjs",
+    "build": "npm run remotion:bundle && next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@remotion/bundler": "^4.0.461",
     "@remotion/player": "^4.0.461",
     "@remotion/renderer": "^4.0.461",
     "@tailwindcss/postcss": "^4.3.0",
@@ -24,7 +25,12 @@
     "tailwindcss": "^4.3.0",
     "uuid": "^14.0.0"
   },
+  "optionalDependencies": {
+    "@remotion/compositor-linux-x64-gnu": "4.0.461",
+    "@rspack/binding-linux-x64-gnu": "1.7.6"
+  },
   "devDependencies": {
+    "@remotion/bundler": "^4.0.461",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

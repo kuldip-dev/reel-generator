@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "src/app/api/generate-video/route.ts": {
+      "maxDuration": 300,
+      "memory": 3008
+    }
+  }
+}

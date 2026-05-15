@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { getRendersDir } from "./fileUtils";
 import type { Effect, BackgroundStyle, TextOverlayConfig } from "./validation";
@@ -16,19 +15,21 @@ export interface RenderOptions {
   outputFileName: string;
 }
 
-// Cache the bundle URL across renders in the same process to avoid re-bundling
-let cachedBundleUrl: string | null = null;
+const PREBUILT_BUNDLE_DIR = path.join(process.cwd(), ".remotion", "bundle");
 
-async function getBundleUrl(): Promise<string> {
-  if (cachedBundleUrl) return cachedBundleUrl;
+function prebuiltBundleExists(): boolean {
+  return fs.existsSync(path.join(PREBUILT_BUNDLE_DIR, "index.html"));
+}
 
-  const entryPoint = path.join(process.cwd(), "src", "remotion", "index.ts");
-  cachedBundleUrl = await bundle({
-    entryPoint,
-    onProgress: () => {},
-  });
+/** Serve URL from the bundle created by `npm run remotion:bundle` at build time. */
+function getServeUrl(): string {
+  if (prebuiltBundleExists()) {
+    return PREBUILT_BUNDLE_DIR;
+  }
 
-  return cachedBundleUrl;
+  throw new Error(
+    "Remotion bundle not found at .remotion/bundle. Run: npm run remotion:bundle"
+  );
 }
 
 /**
@@ -83,7 +84,7 @@ export async function renderReelVideo(options: RenderOptions): Promise<string> {
     durationInFrames,
   };
 
-  const serveUrl = await getBundleUrl();
+  const serveUrl = getServeUrl();
 
   const composition = await selectComposition({
     serveUrl,
