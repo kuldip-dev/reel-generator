@@ -1,66 +1,312 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
+import { ImageUploader } from "@/components/ImageUploader";
+import { EffectSelector } from "@/components/EffectSelector";
+import { GenerateButton } from "@/components/GenerateButton";
+import type { Effect, TextOverlayConfig } from "@/lib/validation";
+
+type AppState = "idle" | "generating" | "done" | "error";
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function Home() {
+  // Form state
+  const [images, setImages] = useState<File[]>([]);
+  const [effects, setEffects] = useState<Effect[]>([]);
+  const [overlays, setOverlays] = useState<TextOverlayConfig[]>([]);
+  const [durationPerImage, setDurationPerImage] = useState(3);
+
+  // App state
+  const [appState, setAppState] = useState<AppState>("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [downloadUrl, setDownloadUrl] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [hasDownloaded, setHasDownloaded] = useState(false);
+
+  // Warn the user before they refresh/navigate away when:
+  //   • images have been uploaded (unsaved work), OR
+  //   • a rendered video is ready but hasn't been downloaded yet.
+  const hasUnsavedWork = images.length > 0 || (appState === "done" && !hasDownloaded);
+  const unsavedRef = useRef(hasUnsavedWork);
+
+  useEffect(() => {
+    unsavedRef.current = hasUnsavedWork;
+  }, [hasUnsavedWork]);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!unsavedRef.current) return;
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // Keep effects and overlays array length in sync with images
+  const handleImagesChange = (newImages: File[]) => {
+    setImages(newImages);
+    setEffects((prev) => newImages.map((_, i) => prev[i] ?? "fade"));
+    setOverlays((prev) => newImages.map((_, i) => prev[i] ?? {}));
+  };
+
+  const canGenerate = images.length > 0 && appState !== "generating";
+
+  const handleGenerate = async () => {
+    if (!canGenerate) return;
+
+    setAppState("generating");
+    setErrorMessage("");
+    setDownloadUrl("");
+    setHasDownloaded(false);
+
+    try {
+      const formData = new FormData();
+      images.forEach((img) => formData.append("images", img));
+      formData.append("effects", JSON.stringify(effects));
+      formData.append("overlays", JSON.stringify(overlays));
+      formData.append("backgroundStyle", "blur");
+      formData.append("durationPerImage", durationPerImage.toString());
+
+      const res = await fetch("/api/generate-video", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Video generation failed.");
+      }
+
+      setDownloadUrl(data.downloadUrl);
+      setFileName(data.fileName);
+      setAppState("done");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
+      setErrorMessage(msg);
+      setAppState("error");
+    }
+  };
+
+  const handleDownload = () => {
+    setHasDownloaded(true);
+  };
+
+  const handleReset = () => {
+    setImages([]);
+    setEffects([]);
+    setOverlays([]);
+    setDurationPerImage(3);
+    setAppState("idle");
+    setErrorMessage("");
+    setDownloadUrl("");
+    setFileName("");
+    setHasDownloaded(false);
+  };
+
+  const estimatedDuration = images.length * durationPerImage;
+  const isGenerating = appState === "generating";
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-[#0a0a0f] text-white">
+      {/* Header */}
+      <header className="border-b border-white/5 px-6 py-4 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-linear-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center">
+          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M4 8h11a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" />
+          </svg>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        <div>
+          <h1 className="text-sm font-bold tracking-tight text-white">Reel Generator</h1>
+          <p className="text-[11px] text-white/40">Powered by Remotion · 1080×1920 · MP4</p>
+        </div>
+        <div className="ml-auto">
+          <span className="text-[11px] bg-violet-600/20 text-violet-300 border border-violet-600/30 rounded-full px-3 py-1">
+            Local MVP
+          </span>
+        </div>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+
+        {/* Step 1 — Upload images */}
+        <section className="bg-white/3 border border-white/8 rounded-2xl p-5">
+          <SectionLabel number={1} label="Upload Images" subtitle="3–10 images recommended" />
+          <ImageUploader images={images} onImagesChange={handleImagesChange} isGenerating={isGenerating} />
+        </section>
+
+        {/* Step 2 — Effects & duration */}
+        <section className="bg-white/3 border border-white/8 rounded-2xl p-5">
+          <SectionLabel number={2} label="Effects & Duration" subtitle="Per-image animation and timing" />
+          <EffectSelector
+            images={images}
+            effects={effects}
+            overlays={overlays}
+            durationPerImage={durationPerImage}
+            onEffectsChange={setEffects}
+            onOverlaysChange={setOverlays}
+            onDurationChange={setDurationPerImage}
+            isGenerating={isGenerating}
+          />
+        </section>
+
+        {/* Summary strip */}
+        {images.length > 0 && (
+          <div className="flex flex-wrap gap-3 text-xs">
+            <Pill icon="🖼" label={`${images.length} image${images.length !== 1 ? "s" : ""}`} />
+            <Pill icon="⏱" label={`~${estimatedDuration}s video`} />
+            <Pill icon="📐" label="1080 × 1920" />
+          </div>
+        )}
+
+        {/* Error state */}
+        {appState === "error" && (
+          <div className="flex items-start gap-3 bg-red-900/20 border border-red-500/30 rounded-2xl px-4 py-3">
+            <svg className="w-5 h-5 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-red-300 text-sm font-semibold">Generation Failed</p>
+              <p className="text-red-300/70 text-xs mt-0.5">{errorMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Generating progress */}
+        {appState === "generating" && (
+          <div className="bg-white/3 border border-white/8 rounded-2xl p-5">
+            <div className="flex items-center gap-4">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-violet-600/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-violet-400 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Rendering your reel…</p>
+                <p className="text-white/40 text-xs mt-0.5">
+                  This may take {Math.round(estimatedDuration * 2)}–{Math.round(estimatedDuration * 5)} seconds
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-linear-to-r from-violet-500 to-fuchsia-500 rounded-full"
+                style={{ width: "60%", animation: "progress-slide 1.8s ease-in-out infinite" }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Done state — download */}
+        {appState === "done" && downloadUrl && (
+          <div className="bg-emerald-900/15 border border-emerald-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Your reel is ready!</p>
+                <p className="text-white/40 text-xs">{fileName}</p>
+              </div>
+            </div>
+
+            {hasDownloaded ? (
+              <div className="flex items-center gap-2 justify-center py-2 text-emerald-400/70 text-sm">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Downloaded — file has been removed from server
+              </div>
+            ) : (
+              <>
+                <a
+                  href={downloadUrl}
+                  download={fileName}
+                  onClick={handleDownload}
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download MP4
+                </a>
+                <p className="text-center text-amber-400/60 text-xs mt-2">
+                  ⚠ File will be deleted after download — save it to your device
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <GenerateButton
+              onClick={handleGenerate}
+              loading={appState === "generating"}
+              disabled={!canGenerate}
             />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+          {(images.length > 0 || appState !== "idle") && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-4 py-2 rounded-2xl border border-white/10 bg-white/5 text-white/50 hover:text-white hover:border-white/30 transition-all text-sm font-medium"
+            >
+              Reset
+            </button>
+          )}
         </div>
-      </main>
+
+        <p className="text-center text-white/20 text-xs pb-4">
+          Images are processed locally · Render file deleted after download
+        </p>
+      </div>
+
+      <style>{`
+        @keyframes progress-slide {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(80%); }
+          100% { transform: translateX(200%); }
+        }
+      `}</style>
+    </main>
+  );
+}
+
+// ── Small helper components ──────────────────────────────────────────────────
+
+function SectionLabel({
+  number,
+  label,
+  subtitle,
+}: {
+  number: number;
+  label: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-6 h-6 rounded-full bg-violet-600/30 border border-violet-500/40 flex items-center justify-center text-[11px] font-bold text-violet-300">
+        {number}
+      </div>
+      <div>
+        <h2 className="text-sm font-semibold text-white">{label}</h2>
+        {subtitle && <p className="text-[11px] text-white/40">{subtitle}</p>}
+      </div>
     </div>
+  );
+}
+
+function Pill({ icon, label }: { icon: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-3 py-1 text-white/60">
+      <span>{icon}</span>
+      <span>{label}</span>
+    </span>
   );
 }
