@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { EffectSelector } from "@/components/EffectSelector";
 import { GenerateButton } from "@/components/GenerateButton";
+import { AudioSelector, type AudioConfig } from "@/components/AudioSelector";
 import { renderReelVideoClient } from "@/lib/renderVideoClient";
 import {
   validateVideoFormData,
@@ -18,6 +19,10 @@ export default function Home() {
   const [effects, setEffects] = useState<Effect[]>([]);
   const [overlays, setOverlays] = useState<TextOverlayConfig[]>([]);
   const [durationPerImage, setDurationPerImage] = useState(3);
+
+  const [audioConfig, setAudioConfig] = useState<AudioConfig | null>(null);
+  const [audioLoadError, setAudioLoadError] = useState("");
+  const [audioLoading, setAudioLoading] = useState(false);
 
   const [appState, setAppState] = useState<AppState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -66,6 +71,30 @@ export default function Home() {
     setOverlays((prev) => newImages.map((_, i) => prev[i] ?? {}));
   };
 
+  const estimatedDuration = images.length * durationPerImage;
+
+  // Keep audio crop window in sync whenever video duration changes
+  useEffect(() => {
+    if (!audioConfig || estimatedDuration <= 0) return;
+
+    const newEnd = audioConfig.cropStart + estimatedDuration;
+
+    if (newEnd > audioConfig.duration) {
+      // Audio is now too short — clear it and surface an error
+      setAudioConfig(null);
+      setAudioLoadError(
+        `Audio is too short for the new video duration (${estimatedDuration}s). Please choose a longer file.`
+      );
+      return;
+    }
+
+    // Auto-adjust cropEnd to match new video duration
+    if (audioConfig.cropEnd !== newEnd) {
+      setAudioConfig({ ...audioConfig, cropEnd: newEnd });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimatedDuration]);
+
   const canGenerate = images.length > 0 && appState !== "generating";
 
   const handleGenerate = async () => {
@@ -77,6 +106,7 @@ export default function Home() {
       effects,
       durationPerImage,
       backgroundStyle: "blur",
+      audioConfig,
     });
 
     if (!validation.valid) {
@@ -102,6 +132,12 @@ export default function Home() {
         durationPerImage,
         backgroundStyle: "blur",
         onProgress: (p) => setRenderProgress(Math.round(p * 100)),
+        ...(audioConfig
+          ? {
+              audioDataUri: audioConfig.audioDataUri,
+              audioCropStart: audioConfig.cropStart,
+            }
+          : {}),
       });
 
       objectUrlRef.current = objectUrl;
@@ -126,6 +162,9 @@ export default function Home() {
     setEffects([]);
     setOverlays([]);
     setDurationPerImage(3);
+    setAudioConfig(null);
+    setAudioLoadError("");
+    setAudioLoading(false);
     setAppState("idle");
     setErrorMessage("");
     setFileName("");
@@ -133,7 +172,6 @@ export default function Home() {
     setRenderProgress(0);
   };
 
-  const estimatedDuration = images.length * durationPerImage;
   const isGenerating = appState === "generating";
 
   return (
@@ -186,11 +224,45 @@ export default function Home() {
           />
         </section>
 
+        {/* Section 3 — Audio (unlocked after images + duration are set) */}
+        {images.length > 0 && (
+          <section
+            className={`bg-white/3 border rounded-2xl p-5 transition-all ${
+              audioConfig
+                ? "border-violet-500/30"
+                : "border-white/8"
+            }`}
+          >
+            <SectionLabel
+              number={3}
+              label="Add Audio"
+              subtitle={`Optional background music — must be ≥ ${estimatedDuration}s`}
+              badge={audioConfig ? "Added" : "Optional"}
+            />
+            <AudioSelector
+              videoDuration={estimatedDuration}
+              audioConfig={audioConfig}
+              onAudioChange={(cfg) => {
+                setAudioConfig(cfg);
+                setAudioLoadError("");
+              }}
+              onError={setAudioLoadError}
+              loadError={audioLoadError}
+              loading={audioLoading}
+              onLoadingChange={setAudioLoading}
+              isGenerating={isGenerating}
+            />
+          </section>
+        )}
+
         {images.length > 0 && (
           <div className="flex flex-wrap gap-3 text-xs">
             <Pill icon="🖼" label={`${images.length} image${images.length !== 1 ? "s" : ""}`} />
             <Pill icon="⏱" label={`~${estimatedDuration}s video`} />
             <Pill icon="📐" label="1080 × 1920" />
+            {audioConfig && (
+              <Pill icon="🎵" label={`Audio · ${audioConfig.file.name.split(".").slice(0, -1).join(".").slice(0, 20)}`} />
+            )}
           </div>
         )}
 
@@ -304,18 +376,33 @@ function SectionLabel({
   number,
   label,
   subtitle,
+  badge,
 }: {
   number: number;
   label: string;
   subtitle?: string;
+  badge?: string;
 }) {
   return (
     <div className="flex items-center gap-3 mb-4">
-      <div className="w-6 h-6 rounded-full bg-violet-600/30 border border-violet-500/40 flex items-center justify-center text-[11px] font-bold text-violet-300">
+      <div className="w-6 h-6 rounded-full bg-violet-600/30 border border-violet-500/40 flex items-center justify-center text-[11px] font-bold text-violet-300 shrink-0">
         {number}
       </div>
-      <div>
-        <h2 className="text-sm font-semibold text-white">{label}</h2>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-white">{label}</h2>
+          {badge && (
+            <span
+              className={`text-[10px] font-semibold rounded-full px-2 py-0.5 border ${
+                badge === "Added"
+                  ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+                  : "text-white/30 bg-white/5 border-white/10"
+              }`}
+            >
+              {badge}
+            </span>
+          )}
+        </div>
         {subtitle && <p className="text-[11px] text-white/40">{subtitle}</p>}
       </div>
     </div>

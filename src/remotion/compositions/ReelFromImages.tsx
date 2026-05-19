@@ -8,7 +8,11 @@ import {
   interpolate,
   spring,
 } from "remotion";
+import { Audio } from "@remotion/media";
+import { loadFont, fontFamily as antonFont } from "@remotion/google-fonts/Anton";
 import type { Effect, BackgroundStyle, TextPosition, TextAnimation, TextOverlayConfig } from "../../lib/validation";
+
+loadFont();
 
 export interface ReelFromImagesProps {
   images: string[];
@@ -21,6 +25,10 @@ export interface ReelFromImagesProps {
   durationPerImage: number;
   backgroundStyle: BackgroundStyle;
   durationInFrames: number;
+  /** Optional audio track data URI */
+  audioSrc?: string;
+  /** Seconds into the audio file to start playback from */
+  audioCropStart?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -557,7 +565,7 @@ function positionStyles(pos: TextPosition): React.CSSProperties {
     justifyContent: vAlign,
     alignItems: hAlign,
     paddingTop: isTop ? 100 : 0,
-    paddingBottom: isBottom ? 100 : 0,
+    paddingBottom: isBottom ? 240 : 0,
     paddingLeft: 60,
     paddingRight: 60,
     textAlign,
@@ -585,22 +593,33 @@ const TextOverlay: React.FC<{ overlay: TextOverlayConfig; totalFrames: number }>
         flexDirection: "column",
         pointerEvents: "none",
         alignItems,
+        background:
+          "linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.55) 35%, rgba(0,0,0,0.18) 60%, transparent 100%)",
         ...containerStyle,
       }}
     >
       {/* Animation wrapper — wraps title + description together */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems, ...animStyle }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems,
+          ...animStyle,
+        }}
+      >
         {title && (
           <div
             style={{
-              fontFamily: "'Arial', sans-serif",
-              fontSize: 72,
-              fontWeight: 800,
+              fontFamily: antonFont,
+              fontSize: 80,
+              fontWeight: 400,
               color: "#ffffff",
               textAlign: textAlign as React.CSSProperties["textAlign"],
-              textShadow: "0 4px 24px rgba(0,0,0,0.8)",
-              lineHeight: 1.2,
-              marginBottom: subtitle ? 24 : 0,
+              textShadow: "0 4px 24px rgba(0,0,0,0.85)",
+              lineHeight: 1.15,
+              letterSpacing: "1px",
+              textTransform: "uppercase",
+              marginBottom: subtitle ? 8 : 0,
               maxWidth: "90%",
               wordBreak: "break-word",
             }}
@@ -611,13 +630,15 @@ const TextOverlay: React.FC<{ overlay: TextOverlayConfig; totalFrames: number }>
         {subtitle && (
           <div
             style={{
-              fontFamily: "'Arial', sans-serif",
-              fontSize: 44,
+              fontFamily: antonFont,
+              fontSize: 42,
               fontWeight: 400,
-              color: "rgba(255,255,255,0.85)",
+              color: "rgba(255,255,255,0.9)",
               textAlign: textAlign as React.CSSProperties["textAlign"],
-              textShadow: "0 2px 16px rgba(0,0,0,0.7)",
+              textShadow: "0 2px 16px rgba(0,0,0,0.75)",
               lineHeight: 1.3,
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
               maxWidth: "85%",
               wordBreak: "break-word",
             }}
@@ -669,12 +690,22 @@ export const ReelFromImages: React.FC<ReelFromImagesProps> = ({
   effects,
   durationPerImage,
   backgroundStyle,
+  durationInFrames,
+  audioSrc,
+  audioCropStart = 0,
 }) => {
   const { fps } = useVideoConfig();
   const framesPerImage = Math.ceil(durationPerImage * fps);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
+      {/* Audio track — trimBefore expects frames, so convert audioCropStart (seconds) to frames */}
+      {audioSrc && (
+        <Sequence from={0} durationInFrames={durationInFrames}>
+          <Audio src={audioSrc} trimBefore={Math.floor(audioCropStart * fps)} />
+        </Sequence>
+      )}
+
       {images.map((src, index) => (
         <Sequence
           key={index}

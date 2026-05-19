@@ -11,6 +11,8 @@ const defaultProps: ReelFromImagesProps = {
   durationPerImage: 3,
   backgroundStyle: "blur",
   durationInFrames: 90,
+  audioSrc: undefined,
+  audioCropStart: 0,
 };
 
 /**

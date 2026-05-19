@@ -17,6 +17,9 @@ export interface ClientRenderOptions {
   durationPerImage: number;
   backgroundStyle: BackgroundStyle;
   onProgress?: (progress: number) => void;
+  /** Optional audio — data URI + crop start in seconds */
+  audioDataUri?: string;
+  audioCropStart?: number;
 }
 
 function fileToDataUri(file: File): Promise<string> {
@@ -38,6 +41,8 @@ export async function renderReelVideoClient(
     durationPerImage,
     backgroundStyle,
     onProgress,
+    audioDataUri,
+    audioCropStart = 0,
   } = options;
 
   const imageDataUris = await Promise.all(images.map(fileToDataUri));
@@ -55,6 +60,7 @@ export async function renderReelVideoClient(
     durationPerImage,
     backgroundStyle,
     durationInFrames,
+    ...(audioDataUri ? { audioSrc: audioDataUri, audioCropStart } : {}),
   };
 
   const { getBlob } = await renderMediaOnWeb({

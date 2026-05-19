@@ -55,6 +55,15 @@ export interface TextOverlayConfig {
   textAnimation?: TextAnimation;
 }
 
+/** Audio track + crop configuration */
+export interface AudioConfig {
+  file: File;
+  audioDataUri: string;
+  duration: number;    // total audio file duration in seconds
+  cropStart: number;   // crop window start (seconds)
+  cropEnd: number;     // crop window end (seconds)
+}
+
 export interface VideoFormData {
   images: File[];
   /** Per-image text overlays — one entry per image */
@@ -63,6 +72,8 @@ export interface VideoFormData {
   effects: Effect[];
   durationPerImage: number;
   backgroundStyle: BackgroundStyle;
+  /** Optional audio track with crop settings */
+  audioConfig?: AudioConfig | null;
 }
 
 export interface ValidationResult {
@@ -152,6 +163,25 @@ export function validateVideoFormData(data: VideoFormData): ValidationResult {
       valid: false,
       error: "Total video must be longer than 5 seconds. Add more images or increase duration per image.",
     };
+  }
+
+  if (data.audioConfig) {
+    const { cropStart, cropEnd, duration } = data.audioConfig;
+
+    if (cropStart < 0 || cropStart >= duration) {
+      return { valid: false, error: "Audio crop start is out of range." };
+    }
+    if (cropEnd <= cropStart || cropEnd > duration) {
+      return { valid: false, error: "Audio crop end is out of range." };
+    }
+
+    const clipDuration = cropEnd - cropStart;
+    if (clipDuration < totalSeconds - 0.05) {
+      return {
+        valid: false,
+        error: `Audio clip (${Math.round(clipDuration)}s) is shorter than the video (${Math.round(totalSeconds)}s). Expand the crop selection.`,
+      };
+    }
   }
 
   return { valid: true };
