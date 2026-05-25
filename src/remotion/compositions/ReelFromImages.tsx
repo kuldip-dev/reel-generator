@@ -565,9 +565,9 @@ function positionStyles(pos: TextPosition): React.CSSProperties {
     justifyContent: vAlign,
     alignItems: hAlign,
     paddingTop: isTop ? 100 : 0,
-    paddingBottom: isBottom ? 240 : 0,
+    paddingBottom: isBottom ? 350 : 0,
     paddingLeft: 60,
-    paddingRight: 60,
+    paddingRight: 80,
     textAlign,
   };
 }
