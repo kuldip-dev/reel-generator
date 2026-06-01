@@ -3,8 +3,8 @@ import "./globals.css";
 import "react-easy-crop/react-easy-crop.css";
 
 export const metadata: Metadata = {
-  title: "Reel Generator — Image to Video",
-  description: "Generate 9:16 reel videos from your images using Remotion",
+  title: "Video Studio — Reels & more",
+  description: "Create reel videos, match previews, and more — rendered in your browser",
 };
 
 export default function RootLayout({
